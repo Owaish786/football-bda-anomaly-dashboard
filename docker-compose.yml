@@ -1,0 +1,68 @@
+services:
+  spark-master:
+    image: apache/spark:3.5.0
+    container_name: spark-master
+    command:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.master.Master
+      - --host
+      - spark-master
+      - --port
+      - "7077"
+      - --webui-port
+      - "8080"
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    volumes:
+      - ./data:/data
+    networks:
+      - spark-network
+
+  spark-worker:
+    image: apache/spark:3.5.0
+    container_name: spark-worker
+    command:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.worker.Worker
+      - spark://spark-master:7077
+      - --webui-port
+      - "8081"
+      - --cores
+      - "2"
+      - --memory
+      - 2g
+    ports:
+      - "8081:8081"
+    depends_on:
+      - spark-master
+    volumes:
+      - ./data:/data
+    networks:
+      - spark-network
+
+  api-service:
+    build: .
+    container_name: football-api
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+      - DATA_PATH=/data
+      - API_PORT=5000
+      - API_DEBUG=False
+      - PYTHONPATH=/app
+    ports:
+      - "5001:5000"
+    depends_on:
+      - spark-master
+      - spark-worker
+    volumes:
+      - ./data:/data
+      - ./data:/app/data
+      - ./backend:/app/backend
+    networks:
+      - spark-network
+    command: python3 -m backend.api.app
+
+networks:
+  spark-network:
+    driver: bridge
