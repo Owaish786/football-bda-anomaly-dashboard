@@ -6,6 +6,13 @@ This backend provides REST APIs for football analytics, including:
 - **Team Rankings** - Rank teams by performance metrics
 - **Team Comparison** - Compare two teams side-by-side
 - **Player Comparison** - Compare two players side-by-side
+- **Live Scores** - Real-time matches in progress
+- **Fixtures** - Upcoming/past matches by filters
+- **Standings** - League table rankings
+- **Team Stats** - Team-level season statistics
+- **Player Stats** - Team squad player stats
+- **Match Events** - Minute-level fixture events
+- **Match Prediction** - Hybrid prediction by fixture id using processed PySpark data + live context
 
 ## 🏗️ Architecture
 
@@ -161,6 +168,56 @@ Content-Type: application/json
 }
 ```
 
+## ⚡ Live Football API Endpoints
+
+These endpoints proxy API-Football (`v3.football.api-sports.io`) from your backend.
+
+### 1. Live Scores
+```bash
+GET /api/live/scores
+GET /api/live/scores?league=39&season=2023
+```
+
+### 2. Fixtures
+```bash
+GET /api/live/fixtures
+GET /api/live/fixtures?league=39&season=2023
+GET /api/live/fixtures?team=33&season=2023&next=5
+GET /api/live/fixtures?league=39&season=2023&date=2026-04-19
+```
+
+### 3. Standings
+```bash
+GET /api/live/standings?league=39&season=2023
+```
+
+### 4. Team Stats
+```bash
+GET /api/live/team-stats?team=33&league=39&season=2023
+```
+
+### 5. Player Stats
+```bash
+GET /api/live/player-stats?team=33&season=2023
+GET /api/live/player-stats?team=33&league=39&season=2023&page=1
+```
+
+### 6. Match Events
+```bash
+GET /api/live/match-events?fixture=215662
+```
+
+### 7. Match Prediction
+```bash
+GET /api/predict/match?fixture=215662
+GET /api/predict/match?fixture=215662&include_external=true
+```
+
+Prediction behavior:
+- Uses your processed dataset (`data/processed_results.json`, generated from PySpark pipeline) as the primary signal.
+- Blends in live team context from standings + team statistics for the fixture league/season.
+- Optional `include_external=true` appends API-Football prediction for side-by-side comparison.
+
 ## 🧪 Testing the API
 
 ### Using the Python Client
@@ -219,6 +276,12 @@ FLASK_ENV=development
 API_HOST=0.0.0.0
 API_PORT=5000
 API_DEBUG=True
+
+# Live Football API (API-Sports)
+FOOTBALL_API_KEY=your_api_key_here
+FOOTBALL_API_HOST=v3.football.api-sports.io
+LIVE_API_BASE_URL=https://v3.football.api-sports.io
+LIVE_API_TIMEOUT=12
 ```
 
 ## 🐳 Docker Services

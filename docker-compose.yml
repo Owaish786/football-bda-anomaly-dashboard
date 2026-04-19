@@ -50,6 +50,10 @@ services:
       - API_PORT=5000
       - API_DEBUG=False
       - PYTHONPATH=/app
+      - FOOTBALL_API_KEY=${FOOTBALL_API_KEY}
+      - FOOTBALL_API_HOST=${FOOTBALL_API_HOST:-v3.football.api-sports.io}
+      - LIVE_API_BASE_URL=${LIVE_API_BASE_URL:-https://v3.football.api-sports.io}
+      - LIVE_API_TIMEOUT=${LIVE_API_TIMEOUT:-12}
     ports:
       - "5001:5000"
     depends_on:

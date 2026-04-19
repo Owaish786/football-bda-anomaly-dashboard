@@ -4,17 +4,30 @@ All data comes from http://localhost:5001 (Flask backend)
 No mock data - everything is real!
 """
 
+import os
 import pandas as pd
 import requests
 
-API_URL = "http://localhost:5001"
+API_URL = os.getenv("FOOTBALL_BACKEND_URL", "http://localhost:5001")
+FALLBACK_API_URL = os.getenv("FOOTBALL_BACKEND_URL_FALLBACK", "http://localhost:5000")
 
 
 def _safe_get(path: str, timeout: int = 5):
+    urls = [API_URL]
+    if FALLBACK_API_URL != API_URL:
+        urls.append(FALLBACK_API_URL)
+
     try:
-        response = requests.get(f"{API_URL}{path}", timeout=timeout)
-        if response.status_code == 200:
-            return response.json()
+        for base_url in urls:
+            response = requests.get(f"{base_url}{path}", timeout=timeout)
+            try:
+                payload = response.json()
+            except Exception:
+                payload = None
+
+            # Return payload for both success and failure so UI can surface backend errors.
+            if payload is not None:
+                return payload
     except Exception:
         return None
     return None
@@ -265,3 +278,84 @@ def get_team_anomalies(contamination: float = 0.2, top_n: int = 10) -> dict:
         "data": [],
         "error": "Could not fetch anomaly results from backend API.",
     }
+
+
+# ─────────────────────────────────────────────
+#  LIVE FOOTBALL DATA (API-Sports via backend)
+# ─────────────────────────────────────────────
+
+def get_live_scores(league: int = None, season: int = None) -> dict:
+    """Get currently live matches and scores."""
+    query = []
+    if league is not None:
+        query.append(f"league={int(league)}")
+    if season is not None:
+        query.append(f"season={int(season)}")
+    qs = "&".join(query)
+    path = "/api/live/scores" + (f"?{qs}" if qs else "")
+    payload = _safe_get(path, timeout=8)
+    return payload or {"success": False, "error": "Could not fetch live scores.", "data": []}
+
+
+def get_live_fixtures(
+    league: int = None,
+    season: int = None,
+    team: int = None,
+    fixture_date: str = None,
+    next_n: int = None,
+    last_n: int = None,
+) -> dict:
+    """Get fixtures using backend filters."""
+    query = []
+    if league is not None:
+        query.append(f"league={int(league)}")
+    if season is not None:
+        query.append(f"season={int(season)}")
+    if team is not None:
+        query.append(f"team={int(team)}")
+    if fixture_date:
+        query.append(f"date={fixture_date}")
+    if next_n is not None:
+        query.append(f"next={int(next_n)}")
+    if last_n is not None:
+        query.append(f"last={int(last_n)}")
+    qs = "&".join(query)
+    path = "/api/live/fixtures" + (f"?{qs}" if qs else "")
+    payload = _safe_get(path, timeout=8)
+    return payload or {"success": False, "error": "Could not fetch fixtures.", "data": []}
+
+
+def get_live_standings(league: int, season: int) -> dict:
+    """Get standings for a league season."""
+    payload = _safe_get(f"/api/live/standings?league={int(league)}&season={int(season)}", timeout=8)
+    return payload or {"success": False, "error": "Could not fetch standings.", "data": []}
+
+
+def get_live_team_stats(team: int, league: int, season: int) -> dict:
+    """Get team stats for one team in a league season."""
+    payload = _safe_get(
+        f"/api/live/team-stats?team={int(team)}&league={int(league)}&season={int(season)}",
+        timeout=8,
+    )
+    return payload or {"success": False, "error": "Could not fetch team stats.", "data": []}
+
+
+def get_live_player_stats(team: int, season: int, league: int = None, page: int = 1) -> dict:
+    """Get players stats for a team and season."""
+    path = f"/api/live/player-stats?team={int(team)}&season={int(season)}&page={int(page)}"
+    if league is not None:
+        path += f"&league={int(league)}"
+    payload = _safe_get(path, timeout=10)
+    return payload or {"success": False, "error": "Could not fetch player stats.", "data": []}
+
+
+def get_match_events(fixture: int) -> dict:
+    """Get fixture event timeline."""
+    payload = _safe_get(f"/api/live/match-events?fixture={int(fixture)}", timeout=8)
+    return payload or {"success": False, "error": "Could not fetch match events.", "data": []}
+
+
+def get_match_prediction(fixture: int) -> dict:
+    """Get prediction for fixture."""
+    payload = _safe_get(f"/api/predict/match?fixture={int(fixture)}", timeout=8)
+    return payload or {"success": False, "error": "Could not fetch prediction.", "data": []}

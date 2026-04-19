@@ -47,6 +47,65 @@ class FootballAPIClient:
         response = requests.post(f"{self.base_url}/players/compare", json=payload)
         return response.json()
 
+    def get_live_scores(self, league=None, season=None):
+        """Get currently live matches and scores."""
+        params = {}
+        if league:
+            params['league'] = league
+        if season:
+            params['season'] = season
+        response = requests.get(f"{self.base_url}/live/scores", params=params)
+        return response.json()
+
+    def get_live_fixtures(self, league=None, season=None, team=None, fixture_date=None, next_n=None, last_n=None):
+        """Get fixtures using filters."""
+        params = {}
+        if league:
+            params['league'] = league
+        if season:
+            params['season'] = season
+        if team:
+            params['team'] = team
+        if fixture_date:
+            params['date'] = fixture_date
+        if next_n:
+            params['next'] = next_n
+        if last_n:
+            params['last'] = last_n
+        response = requests.get(f"{self.base_url}/live/fixtures", params=params)
+        return response.json()
+
+    def get_live_standings(self, league, season):
+        """Get standings for a league and season."""
+        response = requests.get(f"{self.base_url}/live/standings", params={'league': league, 'season': season})
+        return response.json()
+
+    def get_live_team_stats(self, team, league, season):
+        """Get team stats for one team in a league season."""
+        response = requests.get(
+            f"{self.base_url}/live/team-stats",
+            params={'team': team, 'league': league, 'season': season}
+        )
+        return response.json()
+
+    def get_live_player_stats(self, team, season, league=None, page=1):
+        """Get player stats by team and season."""
+        params = {'team': team, 'season': season, 'page': page}
+        if league:
+            params['league'] = league
+        response = requests.get(f"{self.base_url}/live/player-stats", params=params)
+        return response.json()
+
+    def get_match_events(self, fixture):
+        """Get detailed events for a fixture."""
+        response = requests.get(f"{self.base_url}/live/match-events", params={'fixture': fixture})
+        return response.json()
+
+    def predict_match(self, fixture):
+        """Get prediction for a fixture."""
+        response = requests.get(f"{self.base_url}/predict/match", params={'fixture': fixture})
+        return response.json()
+
 
 if __name__ == "__main__":
     client = FootballAPIClient()

@@ -28,6 +28,8 @@ from backend.services.data_provider import (
     get_players_list as data_get_players_list,
 )
 from backend.services.ml_service import detect_team_anomalies
+from backend.services.live_api_service import LiveFootballService
+from backend.services.live_prediction_service import LiveMatchPredictionService
 
 load_dotenv()
 
@@ -42,6 +44,8 @@ USE_MOCK_DATA = True  # Set to False when real data is ready
 INIT_STATUS = 'pending'
 INIT_ERROR = None
 INIT_THREAD = None
+live_service = LiveFootballService()
+live_prediction_service = LiveMatchPredictionService(live_service)
 
 
 def initialize_services():
@@ -280,6 +284,150 @@ def team_anomalies():
             'error': str(e),
             'traceback': traceback.format_exc()
         }), 500
+
+
+# ============== LIVE FOOTBALL API ENDPOINTS ==============
+
+@app.route('/api/live/scores', methods=['GET'])
+def get_live_scores_endpoint():
+    """Get currently live fixtures/scores."""
+    try:
+        league = request.args.get('league', default=None, type=int)
+        season = request.args.get('season', default=None, type=int)
+        payload = live_service.get_live_scores(league=league, season=season)
+        status_code = 200 if payload.get('success') else 400
+        return jsonify(payload), status_code
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+
+@app.route('/api/live/fixtures', methods=['GET'])
+def get_live_fixtures_endpoint():
+    """Get fixtures by filters (league/season/team/date/next/last)."""
+    try:
+        league = request.args.get('league', default=None, type=int)
+        season = request.args.get('season', default=None, type=int)
+        team = request.args.get('team', default=None, type=int)
+        fixture_date = request.args.get('date', default=None, type=str)
+        next_n = request.args.get('next', default=None, type=int)
+        last_n = request.args.get('last', default=None, type=int)
+
+        payload = live_service.get_fixtures(
+            league=league,
+            season=season,
+            team=team,
+            fixture_date=fixture_date,
+            next_n=next_n,
+            last_n=last_n,
+        )
+        status_code = 200 if payload.get('success') else 400
+        return jsonify(payload), status_code
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+
+@app.route('/api/live/standings', methods=['GET'])
+def get_live_standings_endpoint():
+    """Get standings for a league and season."""
+    try:
+        league = request.args.get('league', default=None, type=int)
+        season = request.args.get('season', default=None, type=int)
+
+        if not league or not season:
+            return jsonify({
+                'success': False,
+                'error': 'Missing required query params: league and season'
+            }), 400
+
+        payload = live_service.get_standings(league=league, season=season)
+        status_code = 200 if payload.get('success') else 400
+        return jsonify(payload), status_code
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+
+@app.route('/api/live/team-stats', methods=['GET'])
+def get_live_team_stats_endpoint():
+    """Get team statistics for team+league+season."""
+    try:
+        team = request.args.get('team', default=None, type=int)
+        league = request.args.get('league', default=None, type=int)
+        season = request.args.get('season', default=None, type=int)
+
+        if not team or not league or not season:
+            return jsonify({
+                'success': False,
+                'error': 'Missing required query params: team, league, season'
+            }), 400
+
+        payload = live_service.get_team_stats(team=team, league=league, season=season)
+        status_code = 200 if payload.get('success') else 400
+        return jsonify(payload), status_code
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+
+@app.route('/api/live/player-stats', methods=['GET'])
+def get_live_player_stats_endpoint():
+    """Get players and their stats by team/season (optional league, page)."""
+    try:
+        team = request.args.get('team', default=None, type=int)
+        season = request.args.get('season', default=None, type=int)
+        league = request.args.get('league', default=None, type=int)
+        page = request.args.get('page', default=1, type=int)
+
+        if not team or not season:
+            return jsonify({
+                'success': False,
+                'error': 'Missing required query params: team, season'
+            }), 400
+
+        payload = live_service.get_player_stats(team=team, season=season, league=league, page=page)
+        status_code = 200 if payload.get('success') else 400
+        return jsonify(payload), status_code
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+
+@app.route('/api/live/match-events', methods=['GET'])
+def get_live_match_events_endpoint():
+    """Get detailed events for a fixture id."""
+    try:
+        fixture = request.args.get('fixture', default=None, type=int)
+        if not fixture:
+            return jsonify({
+                'success': False,
+                'error': 'Missing required query param: fixture'
+            }), 400
+
+        payload = live_service.get_match_events(fixture=fixture)
+        status_code = 200 if payload.get('success') else 400
+        return jsonify(payload), status_code
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+
+@app.route('/api/predict/match', methods=['GET'])
+def predict_match_endpoint():
+    """Predict fixture outcome using processed PySpark data + live context."""
+    try:
+        fixture = request.args.get('fixture', default=None, type=int)
+        if not fixture:
+            return jsonify({
+                'success': False,
+                'error': 'Missing required query param: fixture'
+            }), 400
+
+        payload = live_prediction_service.predict_fixture(fixture_id=fixture)
+
+        include_external = request.args.get('include_external', default='false', type=str).lower() == 'true'
+        if include_external:
+            payload['external_api_prediction'] = live_service.get_prediction(fixture=fixture)
+
+        status_code = 200 if payload.get('success') else 400
+        return jsonify(payload), status_code
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'traceback': traceback.format_exc()}), 500
 
 
 # ============== ERROR HANDLERS ==============
