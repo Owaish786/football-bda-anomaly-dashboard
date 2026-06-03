@@ -1,28 +1,43 @@
 {
-  "generated_at": "2026-06-03T08:33:14.188232+00:00",
+  "generated_at": "2026-06-03T08:40:36.646689+00:00",
   "dataset": {
     "sources": [
       "events_European_Championship.json",
       "events_World_Cup.json"
     ],
     "matches": 115,
-    "features": 15,
+    "features": 30,
     "feature_columns": [
-      "pass_diff",
-      "shot_diff",
-      "foul_diff",
-      "duel_diff",
-      "free_kick_diff",
-      "offside_diff",
-      "others_on_the_ball_diff",
-      "save_attempt_diff",
-      "goalkeeper_leaving_line_diff",
-      "interruption_diff",
-      "accurate_passes_diff",
-      "shots_on_target_diff",
-      "total_events_diff",
-      "pass_accuracy_rate_diff",
-      "shot_accuracy_rate_diff"
+      "home_matches",
+      "away_matches",
+      "diff_matches",
+      "home_wins",
+      "away_wins",
+      "diff_wins",
+      "home_draws",
+      "away_draws",
+      "diff_draws",
+      "home_losses",
+      "away_losses",
+      "diff_losses",
+      "home_goals_for_pm",
+      "away_goals_for_pm",
+      "diff_goals_for_pm",
+      "home_goals_against_pm",
+      "away_goals_against_pm",
+      "diff_goals_against_pm",
+      "home_goal_diff_pm",
+      "away_goal_diff_pm",
+      "diff_goal_diff_pm",
+      "home_shots_pm",
+      "away_shots_pm",
+      "diff_shots_pm",
+      "home_passes_pm",
+      "away_passes_pm",
+      "diff_passes_pm",
+      "home_fouls_pm",
+      "away_fouls_pm",
+      "diff_fouls_pm"
     ],
     "outcome_distribution": {
       "team1_win": 57,
@@ -33,23 +48,23 @@
     "test_rows": 29
   },
   "classification": {
-    "model": "RandomForestClassifier",
+    "model": "GradientBoostingClassifier",
     "target": "match_outcome (draw/team1_win/team2_win)",
     "metrics": {
-      "accuracy": 0.37931,
-      "precision_macro": 0.345238,
-      "recall_macro": 0.345238,
-      "f1_macro": 0.345238,
-      "roc_auc_ovr_macro": 0.549874
+      "accuracy": 0.62069,
+      "precision_macro": 0.632353,
+      "recall_macro": 0.571429,
+      "f1_macro": 0.585044,
+      "roc_auc_ovr_macro": 0.721501
     }
   },
   "regression": {
     "model": "RandomForestRegressor",
     "target": "goal_difference",
     "metrics": {
-      "mae": 1.34954,
-      "rmse": 1.638841,
-      "r2": -0.078681
+      "mae": 1.275593,
+      "rmse": 1.619297,
+      "r2": -0.053107
     }
   }
 }

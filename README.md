@@ -98,9 +98,9 @@ Evaluation design:
 
 * Match-level rows are built from the two raw event datasets.
 * Final labels are derived from goal events in the raw logs.
-* Features use first-half event-count differentials between the two teams in each match.
+* Features use pre-match historical team form, scoring rates, and event rates for both teams plus their pairwise differences.
 * A 75/25 train/test split is used with `random_state=42`.
-* The classification baseline uses `RandomForestClassifier` for match outcome.
+* The classification baseline uses a tuned `GradientBoostingClassifier` for match outcome.
 * The regression baseline uses `RandomForestRegressor` for goal difference.
 
 The report is written to `data/model_evaluation.json`.
@@ -111,19 +111,19 @@ The report is written to `data/model_evaluation.json`.
 
 | Metric | Value |
 | --- | ---: |
-| Accuracy | 0.379310 |
-| Precision (macro) | 0.345238 |
-| Recall (macro) | 0.345238 |
-| F1 Score (macro) | 0.345238 |
-| ROC-AUC (ovr, macro) | 0.549874 |
+| Accuracy | 0.620690 |
+| Precision (macro) | 0.632353 |
+| Recall (macro) | 0.571429 |
+| F1 Score (macro) | 0.585044 |
+| ROC-AUC (ovr, macro) | 0.721501 |
 
 ### Regression metrics
 
 | Metric | Value |
 | --- | ---: |
-| MAE | 1.349540 |
-| RMSE | 1.638841 |
-| R² | -0.078681 |
+| MAE | 1.275593 |
+| RMSE | 1.619297 |
+| R² | -0.053107 |
 
 These values were computed by running `python evaluate_models.py` in the repository root.
 

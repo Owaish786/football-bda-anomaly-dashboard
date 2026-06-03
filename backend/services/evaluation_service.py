@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
 
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.ensemble import GradientBoostingClassifier, RandomForestRegressor
 from sklearn.metrics import (
     accuracy_score,
     f1_score,
@@ -40,18 +40,7 @@ TEAMS_FILE = DATA_DIR / "teams.json"
 DEFAULT_REPORT_PATH = DATA_DIR / "model_evaluation.json"
 
 
-FIRST_HALF_EVENT_TYPES = [
-    "Pass",
-    "Shot",
-    "Foul",
-    "Duel",
-    "Free Kick",
-    "Offside",
-    "Others on the ball",
-    "Save attempt",
-    "Goalkeeper leaving line",
-    "Interruption",
-]
+MATCH_EVENT_TYPES = ["Pass", "Shot", "Foul", "Duel", "Free Kick", "Offside"]
 
 
 def _load_json(path: Path):
@@ -69,34 +58,46 @@ def _count_tag(event: Dict, tag_id: int) -> int:
     return int(any(tag.get("id") == tag_id for tag in event.get("tags", []) if isinstance(tag, dict)))
 
 
-def _team_half_stats(events: Iterable[Dict]) -> Dict[str, float]:
-    stats = {f"first_half_{event_type.lower().replace(' ', '_')}": 0 for event_type in FIRST_HALF_EVENT_TYPES}
-    stats["first_half_accurate_passes"] = 0
-    stats["first_half_shots_on_target"] = 0
-    stats["first_half_total_events"] = 0
+def _team_match_stats(events: Iterable[Dict]) -> Dict[str, float]:
+    stats = {f"match_{event_type.lower().replace(' ', '_')}": 0 for event_type in MATCH_EVENT_TYPES}
+    stats["match_accurate_passes"] = 0
+    stats["match_shots_on_target"] = 0
+    stats["match_total_events"] = 0
 
     for event in events:
         event_name = event.get("eventName")
-        if event_name in FIRST_HALF_EVENT_TYPES:
-            key = f"first_half_{event_name.lower().replace(' ', '_')}"
+        if event_name in MATCH_EVENT_TYPES:
+            key = f"match_{event_name.lower().replace(' ', '_')}"
             stats[key] += 1
-            stats["first_half_total_events"] += 1
+            stats["match_total_events"] += 1
 
             if event_name == "Pass":
-                stats["first_half_accurate_passes"] += _count_tag(event, 1801)
+                stats["match_accurate_passes"] += _count_tag(event, 1801)
             elif event_name == "Shot":
-                stats["first_half_shots_on_target"] += _count_tag(event, 201)
+                stats["match_shots_on_target"] += _count_tag(event, 201)
 
-    passes = stats.get("first_half_pass", 0)
-    shots = stats.get("first_half_shot", 0)
+    passes = stats.get("match_pass", 0)
+    shots = stats.get("match_shot", 0)
 
-    stats["first_half_pass_accuracy_rate"] = (
-        stats["first_half_accurate_passes"] / passes if passes else 0.0
-    )
-    stats["first_half_shot_accuracy_rate"] = (
-        stats["first_half_shots_on_target"] / shots if shots else 0.0
-    )
+    stats["match_pass_accuracy_rate"] = stats["match_accurate_passes"] / passes if passes else 0.0
+    stats["match_shot_accuracy_rate"] = stats["match_shots_on_target"] / shots if shots else 0.0
     return stats
+
+
+def _history_snapshot(history: Dict[str, float]) -> Dict[str, float]:
+    matches = max(history["matches"], 1)
+    return {
+        "matches": history["matches"],
+        "wins": history["wins"],
+        "draws": history["draws"],
+        "losses": history["losses"],
+        "goals_for_pm": history["goals_for"] / matches,
+        "goals_against_pm": history["goals_against"] / matches,
+        "goal_diff_pm": (history["goals_for"] - history["goals_against"]) / matches,
+        "shots_pm": history["shots"] / matches,
+        "passes_pm": history["passes"] / matches,
+        "fouls_pm": history["fouls"] / matches,
+    }
 
 
 def _team_goal_count(events: Iterable[Dict]) -> int:
@@ -114,6 +115,7 @@ def _build_match_rows() -> Tuple[pd.DataFrame, Dict[str, int]]:
 
     rows: List[Dict[str, float]] = []
     source_counts: Counter = Counter()
+    history = defaultdict(lambda: Counter())
 
     for match_id, events in sorted(match_groups.items()):
         team_ids = sorted({int(event["teamId"]) for event in events if event.get("teamId") is not None})
@@ -123,11 +125,8 @@ def _build_match_rows() -> Tuple[pd.DataFrame, Dict[str, int]]:
         team1_id, team2_id = team_ids
         team1_all = [event for event in events if int(event["teamId"]) == team1_id]
         team2_all = [event for event in events if int(event["teamId"]) == team2_id]
-        team1_first_half = [event for event in team1_all if event.get("matchPeriod") == "1H"]
-        team2_first_half = [event for event in team2_all if event.get("matchPeriod") == "1H"]
-
-        team1_stats = _team_half_stats(team1_first_half)
-        team2_stats = _team_half_stats(team2_first_half)
+        team1_stats = _history_snapshot(history[team1_id])
+        team2_stats = _history_snapshot(history[team2_id])
         team1_goals = _team_goal_count(team1_all)
         team2_goals = _team_goal_count(team2_all)
 
@@ -154,27 +153,29 @@ def _build_match_rows() -> Tuple[pd.DataFrame, Dict[str, int]]:
             "outcome_name": {0: "draw", 1: "team1_win", 2: "team2_win"}[outcome_label],
         }
 
-        for event_type in FIRST_HALF_EVENT_TYPES:
-            key = event_type.lower().replace(" ", "_")
-            row[f"{key}_diff"] = team1_stats[f"first_half_{key}"] - team2_stats[f"first_half_{key}"]
-
-        row["accurate_passes_diff"] = (
-            team1_stats["first_half_accurate_passes"] - team2_stats["first_half_accurate_passes"]
-        )
-        row["shots_on_target_diff"] = (
-            team1_stats["first_half_shots_on_target"] - team2_stats["first_half_shots_on_target"]
-        )
-        row["total_events_diff"] = (
-            team1_stats["first_half_total_events"] - team2_stats["first_half_total_events"]
-        )
-        row["pass_accuracy_rate_diff"] = (
-            team1_stats["first_half_pass_accuracy_rate"] - team2_stats["first_half_pass_accuracy_rate"]
-        )
-        row["shot_accuracy_rate_diff"] = (
-            team1_stats["first_half_shot_accuracy_rate"] - team2_stats["first_half_shot_accuracy_rate"]
-        )
+        for key in team1_stats:
+            row[f"home_{key}"] = team1_stats[key]
+            row[f"away_{key}"] = team2_stats[key]
+            row[f"diff_{key}"] = team1_stats[key] - team2_stats[key]
 
         rows.append(row)
+
+        def _update_history(team_id: int, goals_for: int, goals_against: int, team_events: List[Dict]) -> None:
+            history[team_id]["matches"] += 1
+            history[team_id]["goals_for"] += goals_for
+            history[team_id]["goals_against"] += goals_against
+            history[team_id]["shots"] += sum(1 for event in team_events if event.get("eventName") == "Shot")
+            history[team_id]["passes"] += sum(1 for event in team_events if event.get("eventName") == "Pass")
+            history[team_id]["fouls"] += sum(1 for event in team_events if event.get("eventName") == "Foul")
+            if goals_for > goals_against:
+                history[team_id]["wins"] += 1
+            elif goals_against > goals_for:
+                history[team_id]["losses"] += 1
+            else:
+                history[team_id]["draws"] += 1
+
+        _update_history(team1_id, team1_goals, team2_goals, team1_all)
+        _update_history(team2_id, team2_goals, team1_goals, team2_all)
 
     frame = pd.DataFrame(rows)
     return frame, dict(source_counts)
@@ -189,15 +190,7 @@ def run_evaluation(test_size: float = 0.25, random_state: int = 42, report_path:
     feature_columns = [
         column
         for column in frame.columns
-        if column.endswith("_diff")
-        or column
-        in {
-            "accurate_passes_diff",
-            "shots_on_target_diff",
-            "total_events_diff",
-            "pass_accuracy_rate_diff",
-            "shot_accuracy_rate_diff",
-        }
+        if column.startswith(("home_", "away_", "diff_"))
     ]
 
     X = frame[feature_columns].fillna(0.0)
@@ -213,17 +206,18 @@ def run_evaluation(test_size: float = 0.25, random_state: int = 42, report_path:
         stratify=y_class,
     )
 
-    classifier = RandomForestClassifier(
-        n_estimators=300,
+    classifier = GradientBoostingClassifier(
         random_state=random_state,
-        class_weight="balanced_subsample",
+        n_estimators=200,
+        learning_rate=0.05,
+        max_depth=2,
     )
     classifier.fit(X_train, y_class_train)
     class_predictions = classifier.predict(X_test)
     class_probabilities = classifier.predict_proba(X_test)
 
     regressor = RandomForestRegressor(
-        n_estimators=300,
+        n_estimators=800,
         random_state=random_state,
     )
     regressor.fit(X_train, y_reg_train)
@@ -255,7 +249,7 @@ def run_evaluation(test_size: float = 0.25, random_state: int = 42, report_path:
             "test_rows": int(len(X_test)),
         },
         "classification": {
-            "model": "RandomForestClassifier",
+            "model": "GradientBoostingClassifier",
             "target": "match_outcome (draw/team1_win/team2_win)",
             "metrics": classification_metrics,
         },
