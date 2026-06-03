@@ -1,382 +1,172 @@
-# Football BDA Backend - Setup & Usage Guide
+# Football BDA
 
-## 📋 Overview
+Football BDA is a football analytics project that combines batch data processing, live football API integration, anomaly detection, and a lightweight match-outcome evaluation baseline. The repository ships a Streamlit dashboard, a Flask backend, PySpark processing jobs, and raw Wyscout event data for European Championship and World Cup matches.
 
-This backend provides REST APIs for football analytics, including:
-- **Team Rankings** - Rank teams by performance metrics
-- **Team Comparison** - Compare two teams side-by-side
-- **Player Comparison** - Compare two players side-by-side
-- **Live Scores** - Real-time matches in progress
-- **Fixtures** - Upcoming/past matches by filters
-- **Standings** - League table rankings
-- **Team Stats** - Team-level season statistics
-- **Player Stats** - Team squad player stats
-- **Match Events** - Minute-level fixture events
-- **Match Prediction** - Hybrid prediction by fixture id using processed PySpark data + live context
+## Project Overview
 
-## 🏗️ Architecture
+The codebase supports five main capabilities:
 
-```
-football_bda/
-├── backend/
-│   ├── api/              # Flask REST API
-│   │   ├── app.py        # Main Flask application
-│   │   └── client.py     # API client for testing
-│   ├── spark_jobs/       # PySpark data processing
-│   │   └── data_processor.py
-│   └── services/         # Business logic layer
-│       ├── analytics_service.py
-│       └── mock_data.py
-├── data/                 # Data directory
-├── docker-compose.yml    # Docker orchestration
-├── Dockerfile            # Container configuration
-├── requirements.txt      # Python dependencies
-└── .env                  # Environment variables
+* Data analytics for team and player comparisons.
+* Data engineering with PySpark-based event aggregation.
+* Statistical prediction for fixture outcomes using processed team signals and live API context.
+* Machine learning for team anomaly detection with IsolationForest.
+* Interactive reporting through a Streamlit frontend.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  A[Raw Wyscout JSON events] --> B[PySpark / pandas processing]
+  A --> C[Evaluation baseline]
+  B --> D[processed_results.json]
+  D --> E[Flask API]
+  E --> F[Streamlit dashboard]
+  G[API-Football live API] --> E
+  E --> H[Live match prediction]
+  E --> I[IsolationForest anomalies]
 ```
 
-## 🚀 Quick Start (3 Options)
+### Main components
 
-### Option 1: Docker (Recommended for Production)
+* `backend/api/app.py` exposes the Flask API used by the frontend and clients.
+* `backend/services/analytics_service.py` provides team and player analytics.
+* `backend/services/ml_service.py` contains the IsolationForest anomaly detector.
+* `backend/services/live_prediction_service.py` combines processed team data with live API context for fixture prediction.
+* `backend/spark_jobs/data_processor.py` and `process_data.py` aggregate event data into summary artifacts.
+* `frontend/` contains the Streamlit dashboard and page-level views.
+
+## Does the Project Contain These Capabilities?
+
+* Machine Learning: yes. The project uses IsolationForest for anomaly detection.
+* Statistical Prediction: yes. The live match prediction service combines processed football signals with live context to estimate outcomes.
+* Anomaly Detection: yes. Team anomaly detection is implemented in the backend and exposed through the API and frontend.
+* Data Analytics: yes. Team rankings, comparisons, player comparisons, and live football summaries are analytics workflows.
+* Data Engineering: yes. The Spark job processes raw event data into reusable summaries.
+
+## Datasets
+
+The repository currently includes the following datasets and derived artifacts.
+
+| Dataset | Rows | Features | Source / Notes |
+| --- | ---: | ---: | --- |
+| `data/events_European_Championship.json` | 78,140 | 12 | Wyscout event logs for European Championship matches |
+| `data/events_World_Cup.json` | 101,759 | 12 | Wyscout event logs for World Cup matches |
+| `data/players.json` | 3,603 | 14 | Wyscout player metadata |
+| `data/teams.json` | 142 | 6 | Wyscout team metadata |
+| `data/processed_results.json` | Derived | Derived | Aggregated summary produced by the processing job; contains `teams`, `players`, `team_stats`, `total_rows`, and `total_columns` |
+
+### Derived artifact details
+
+`data/processed_results.json` is not a flat table. It currently contains:
+
+* `teams`: 40 entries
+* `players`: 1,055 entries
+* `team_stats`: 10 entries
+* `total_rows`: 179,899 raw event rows across both event files
+* `total_columns`: 12 raw event columns
+
+## Technologies Used
+
+* Python
+* Flask
+* Streamlit
+* PySpark
+* pandas
+* scikit-learn
+* requests
+* Docker / Docker Compose
+* API-Football for live fixtures, standings, and team stats
+
+## Model Details
+
+### Anomaly Detection
+
+`backend/services/ml_service.py` trains an IsolationForest on aggregated team statistics. It uses team-level features such as shots, passes, fouls, total events, and matches to flag outliers.
+
+### Live Match Prediction
+
+`backend/services/live_prediction_service.py` is a heuristic predictor, not a trained supervised model. It blends:
+
+* processed historical team stats from `data/processed_results.json`
+* live standings and team statistics from API-Football
+
+### Evaluation Baseline
+
+The repository now includes a reproducible evaluation pipeline in `backend/services/evaluation_service.py` and `evaluate_models.py`.
+
+Evaluation design:
+
+* Match-level rows are built from the two raw event datasets.
+* Final labels are derived from goal events in the raw logs.
+* Features use first-half event-count differentials between the two teams in each match.
+* A 75/25 train/test split is used with `random_state=42`.
+* The classification baseline uses `RandomForestClassifier` for match outcome.
+* The regression baseline uses `RandomForestRegressor` for goal difference.
+
+The report is written to `data/model_evaluation.json`.
+
+## Evaluation Metrics
+
+### Classification metrics
+
+| Metric | Value |
+| --- | ---: |
+| Accuracy | 0.379310 |
+| Precision (macro) | 0.345238 |
+| Recall (macro) | 0.345238 |
+| F1 Score (macro) | 0.345238 |
+| ROC-AUC (ovr, macro) | 0.549874 |
+
+### Regression metrics
+
+| Metric | Value |
+| --- | ---: |
+| MAE | 1.349540 |
+| RMSE | 1.638841 |
+| R² | -0.078681 |
+
+These values were computed by running `python evaluate_models.py` in the repository root.
+
+## Results
+
+The current baseline is intentionally simple and reproducible. It demonstrates that the raw event data can be converted into a supervised evaluation dataset, but the regression score and R² indicate that there is room for improvement in the feature set and model choice.
+
+The anomaly detector and live prediction path remain available as separate capabilities. The evaluation pipeline does not modify production API behavior.
+
+## Reproduce the Evaluation
 
 ```bash
-cd football_bda
-
-# Build and start all services
-docker-compose up --build
-
-# API will be available at http://localhost:5000
+python evaluate_models.py
 ```
 
-### Option 2: Local Development (No Docker)
+The generated report is saved to `data/model_evaluation.json`.
+
+## Running the Project
+
+### Local development
 
 ```bash
-cd football_bda
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Add your data to ./data/ folder
-# Copy your CSV file: football_final_dataset.csv
-
-# Run the API
 python backend/api/app.py
-
-# API will be available at http://localhost:5000
 ```
 
-### Option 3: PySpark Only (Data Processing)
+### PySpark processing
 
 ```bash
-cd football_bda
-
-# Install PySpark
-pip install pyspark pandas numpy
-
-# Run data processor
 python backend/spark_jobs/data_processor.py
 ```
 
-## 📊 Data Setup
+### Docker
 
-### Real Data
-Place your CSV file in the `data/` folder:
-```
-football_bda/data/football_final_dataset.csv
-```
-
-Expected CSV columns:
-- `matchId` - Match identifier
-- `teamId` - Team identifier
-- `teamName` - Team name
-- `playerId` - Player identifier
-- `playerName` - Player name
-- `eventName` - Event type (Pass, Shot, Foul, Tackle, etc.)
-- `subEventName` - Event subtype
-- `minute` - Match minute
-- `x` - X coordinate
-- `y` - Y coordinate
-
-### Mock Data
-If no CSV is found, the backend automatically uses mock data for testing.
-
-## 🔌 API Endpoints
-
-### 1. Health Check
 ```bash
-GET /api/health
-```
-Response:
-```json
-{
-  "status": "healthy",
-  "service": "football-bda-api",
-  "using_mock_data": true
-}
+docker-compose up --build
 ```
 
-### 2. Get Team Rankings
-```bash
-GET /api/rankings?limit=20
-```
-Response:
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "rank": 1,
-      "teamName": "Manchester City",
-      "ranking_score": 95.5,
-      "total_matches": 38,
-      "shots": 1250,
-      "passes": 28500,
-      "pass_accuracy": 87.5
-    }
-  ]
-}
-```
+## Future Improvements
 
-### 3. Get Teams List
-```bash
-GET /api/teams
-```
-
-### 4. Compare Teams
-```bash
-POST /api/teams/compare
-Content-Type: application/json
-
-{
-  "team1": "Manchester City",
-  "team2": "Liverpool"
-}
-```
-
-### 5. Get Players List
-```bash
-GET /api/players?team=Manchester City
-```
-
-### 6. Compare Players
-```bash
-POST /api/players/compare
-Content-Type: application/json
-
-{
-  "player1": "Erling Haaland",
-  "player2": "Harry Kane"
-}
-```
-
-## ⚡ Live Football API Endpoints
-
-These endpoints proxy API-Football (`v3.football.api-sports.io`) from your backend.
-
-### 1. Live Scores
-```bash
-GET /api/live/scores
-GET /api/live/scores?league=39&season=2023
-```
-
-### 2. Fixtures
-```bash
-GET /api/live/fixtures
-GET /api/live/fixtures?league=39&season=2023
-GET /api/live/fixtures?team=33&season=2023&next=5
-GET /api/live/fixtures?league=39&season=2023&date=2026-04-19
-```
-
-### 3. Standings
-```bash
-GET /api/live/standings?league=39&season=2023
-```
-
-### 4. Team Stats
-```bash
-GET /api/live/team-stats?team=33&league=39&season=2023
-```
-
-### 5. Player Stats
-```bash
-GET /api/live/player-stats?team=33&season=2023
-GET /api/live/player-stats?team=33&league=39&season=2023&page=1
-```
-
-### 6. Match Events
-```bash
-GET /api/live/match-events?fixture=215662
-```
-
-### 7. Match Prediction
-```bash
-GET /api/predict/match?fixture=215662
-GET /api/predict/match?fixture=215662&include_external=true
-```
-
-Prediction behavior:
-- Uses your processed dataset (`data/processed_results.json`, generated from PySpark pipeline) as the primary signal.
-- Blends in live team context from standings + team statistics for the fixture league/season.
-- Optional `include_external=true` appends API-Football prediction for side-by-side comparison.
-
-## 🧪 Testing the API
-
-### Using the Python Client
-```bash
-cd football_bda
-python backend/api/client.py
-```
-
-### Using cURL
-```bash
-# Health check
-curl http://localhost:5000/api/health
-
-# Get rankings
-curl http://localhost:5000/api/rankings?limit=10
-
-# Get teams
-curl http://localhost:5000/api/teams
-
-# Compare teams
-curl -X POST http://localhost:5000/api/teams/compare \
-  -H "Content-Type: application/json" \
-  -d '{"team1":"Manchester City","team2":"Liverpool"}'
-```
-
-### Using Python Requests
-```python
-import requests
-
-# Get rankings
-response = requests.get('http://localhost:5000/api/rankings?limit=20')
-print(response.json())
-
-# Compare teams
-response = requests.post(
-    'http://localhost:5000/api/teams/compare',
-    json={'team1': 'Manchester City', 'team2': 'Liverpool'}
-)
-print(response.json())
-```
-
-## 📝 Configuration
-
-Edit `.env` file to customize:
-```env
-# Spark Configuration
-SPARK_MASTER=spark://localhost:7077
-SPARK_LOCAL_IP=127.0.0.1
-
-# Data Configuration
-DATA_PATH=./data
-HDFS_PATH=hdfs://namenode:9000/user/spark/football_data/
-
-# API Configuration
-FLASK_ENV=development
-API_HOST=0.0.0.0
-API_PORT=5000
-API_DEBUG=True
-
-# Live Football API (API-Sports)
-FOOTBALL_API_KEY=your_api_key_here
-FOOTBALL_API_HOST=v3.football.api-sports.io
-LIVE_API_BASE_URL=https://v3.football.api-sports.io
-LIVE_API_TIMEOUT=12
-```
-
-## 🐳 Docker Services
-
-### Spark Master
-- Web UI: http://localhost:8080
-- Port: 7077
-
-### Spark Worker
-- Web UI: http://localhost:8081
-
-### API Service
-- Endpoint: http://localhost:5000
-- Container: football-api
-
-## 🔗 Integration with Frontend
-
-The frontend can fetch data using:
-
-```python
-# Python (Streamlit)
-import requests
-
-response = requests.get('http://localhost:5000/api/rankings?limit=20')
-teams = response.json()['data']
-
-# Display in Streamlit
-import streamlit as st
-st.dataframe(teams)
-```
-
-## 🛠️ Troubleshooting
-
-### Issue: Data not loading
-```bash
-# Check if CSV exists
-ls -la data/
-
-# Check logs
-docker logs football-api
-
-# Use mock data (automatic fallback)
-```
-
-### Issue: Port already in use
-```bash
-# Change port in .env
-API_PORT=5001
-
-# Or kill existing process
-lsof -ti:5000 | xargs kill -9
-```
-
-### Issue: Spark connection error
-```bash
-# Check Docker containers
-docker ps
-
-# Restart services
-docker-compose restart
-
-# Check logs
-docker logs spark-master
-```
-
-## 📈 Scaling
-
-For larger datasets:
-
-1. **Increase Spark memory** in `docker-compose.yml`:
-   ```yaml
-   environment:
-     - SPARK_WORKER_MEMORY=4G
-     - SPARK_WORKER_CORES=4
-   ```
-
-2. **Use HDFS path** in `.env`:
-   ```env
-   DATA_PATH=hdfs://namenode:9000/user/spark/football_data/
-   ```
-
-3. **Add more workers**:
-   ```yaml
-   services:
-     spark-worker-2:
-       # Copy spark-worker config
-   ```
-
-## 📚 References
-
-- [PySpark Documentation](https://spark.apache.org/docs/latest/api/python/)
-- [Flask Documentation](https://flask.palletsprojects.com/)
-- [Docker Compose](https://docs.docker.com/compose/)
-- [Apache Spark](https://spark.apache.org/)
-
----
-
-**Ready for production?** Contact the data team to set up HDFS integration and real data pipeline.
+* Replace the baseline random forest models with stronger football-specific feature engineering.
+* Add time-aware cross-validation and calibration checks.
+* Expand evaluation to separate home/away or team-strength prediction tasks.
+* Persist more processed features from the raw event logs.
+* Add automated tests for the evaluation pipeline and data processing jobs.
+* Replace heuristic live prediction logic with a trained supervised model if reliable labels become available.

@@ -1,0 +1,55 @@
+{
+  "generated_at": "2026-06-03T08:33:14.188232+00:00",
+  "dataset": {
+    "sources": [
+      "events_European_Championship.json",
+      "events_World_Cup.json"
+    ],
+    "matches": 115,
+    "features": 15,
+    "feature_columns": [
+      "pass_diff",
+      "shot_diff",
+      "foul_diff",
+      "duel_diff",
+      "free_kick_diff",
+      "offside_diff",
+      "others_on_the_ball_diff",
+      "save_attempt_diff",
+      "goalkeeper_leaving_line_diff",
+      "interruption_diff",
+      "accurate_passes_diff",
+      "shots_on_target_diff",
+      "total_events_diff",
+      "pass_accuracy_rate_diff",
+      "shot_accuracy_rate_diff"
+    ],
+    "outcome_distribution": {
+      "team1_win": 57,
+      "draw": 30,
+      "team2_win": 28
+    },
+    "train_rows": 86,
+    "test_rows": 29
+  },
+  "classification": {
+    "model": "RandomForestClassifier",
+    "target": "match_outcome (draw/team1_win/team2_win)",
+    "metrics": {
+      "accuracy": 0.37931,
+      "precision_macro": 0.345238,
+      "recall_macro": 0.345238,
+      "f1_macro": 0.345238,
+      "roc_auc_ovr_macro": 0.549874
+    }
+  },
+  "regression": {
+    "model": "RandomForestRegressor",
+    "target": "goal_difference",
+    "metrics": {
+      "mae": 1.34954,
+      "rmse": 1.638841,
+      "r2": -0.078681
+    }
+  }
+}

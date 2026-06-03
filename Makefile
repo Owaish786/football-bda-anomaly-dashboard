@@ -1,6 +1,6 @@
 # Football BDA Backend - Makefile
 
-.PHONY: help install run docker-up docker-down test clean
+.PHONY: help install run docker-up docker-down test clean evaluate
 
 help:
 	@echo "Football BDA Backend - Available Commands"
@@ -10,6 +10,7 @@ help:
 	@echo "make docker-up       - Start Docker containers"
 	@echo "make docker-down     - Stop Docker containers"
 	@echo "make test            - Test API endpoints"
+	@echo "make evaluate        - Run evaluation pipeline"
 	@echo "make spark-process   - Run PySpark processor"
 	@echo "make clean           - Clean cache files"
 	@echo "make logs            - Show Docker logs"
@@ -32,6 +33,9 @@ docker-restart:
 
 test:
 	python backend/api/client.py
+
+evaluate:
+	python evaluate_models.py
 
 spark-process:
 	python backend/spark_jobs/data_processor.py
